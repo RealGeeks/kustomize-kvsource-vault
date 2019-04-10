@@ -1,9 +1,8 @@
-FROM golang:1.12.2-alpine3.9
+FROM golang:1.12-stretch
 
-ENV KUSTOMIZE_VER 2.0.0
 ENV KUBECTL_VER 1.13.3
 
-RUN apk --update --no-cache add \
+RUN apt-get update && apt-get install -y \
   curl \
   gettext \
   g++ \
@@ -20,12 +19,10 @@ COPY ./vault.go /go/src/kustomize-kvsource-vault/
 
 RUN go build -buildmode plugin -o /opt/kustomize/plugins/kvSources/vault.so /go/src/kustomize-kvsource-vault/vault.go 
 
-FROM alpine:latest
+FROM debian:stretch-slim
 
-RUN apk --update --no-cache add \
-  # git is required by kustomize to fetch bases from git
+RUN apt-get update && apt-get install -y \
   git
-
 
 COPY --from=0 /opt/kustomize/plugins/kvSources/vault.so /opt/kustomize/plugins/kvSources/vault.so
 COPY --from=0 /go/bin/kustomize /usr/bin/kustomize
