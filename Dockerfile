@@ -18,10 +18,21 @@ RUN go install sigs.k8s.io/kustomize
 
 COPY ./vault.go /go/src/kustomize-kvsource-vault/
 
-RUN go build -buildmode plugin -o /opt/kustomize/plugins/kvSources/vault.so /go/src/kustomize-kvsource-vault/vault.go
+RUN go build -buildmode plugin -o /opt/kustomize/plugins/kvSources/vault.so /go/src/kustomize-kvsource-vault/vault.go 
 
-WORKDIR /working
+FROM alpine:latest
+
+RUN apk --update --no-cache add \
+  # git is required by kustomize to fetch bases from git
+  git
+
+
+COPY --from=0 /opt/kustomize/plugins/kvSources/vault.so /opt/kustomize/plugins/kvSources/vault.so
+COPY --from=0 /go/bin/kustomize /usr/bin/kustomize
+COPY --from=0 /usr/bin/kubectl /usr/bin/kubectl
+
+WORKDIR /working 
 
 ENV XDG_CONFIG_HOME=/opt
 
-ENTRYPOINT ["/go/bin/kustomize", "--enable_alpha_goplugins_accept_panic_risk"]
+ENTRYPOINT ["/usr/bin/kustomize", "--enable_alpha_goplugins_accept_panic_risk"]
