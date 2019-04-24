@@ -8,14 +8,6 @@ import (
 	"github.com/hashicorp/vault/api"
 )
 
-var database = map[string]string{
-	"TREE":      "oak",
-	"ROCKET":    "Saturn V",
-	"FRUIT":     "strawberry",
-	"VEGETABLE": "carrot",
-	"SIMPSON":   "homer",
-}
-
 type plugin struct{}
 
 var KVSource plugin
