@@ -1,7 +1,9 @@
 package main
 
 import (
+	"errors"
 	"fmt"
+	"io/ioutil"
 	"os"
 	"strings"
 
@@ -12,10 +14,31 @@ type plugin struct{}
 
 var KVSource plugin
 
-var vaultAddr = os.Getenv("VAULT_ADDR")
-var token = os.Getenv("VAULT_TOKEN")
+func getToken() (string, error) {
+	var t, exists = os.LookupEnv("VAULT_TOKEN")
+	if !exists {
+		fmt.Print("VAULT_TOKEN not set, trying filesystem...")
+
+		tBytes, err := ioutil.ReadFile("/home/vault/.vault-token")
+		if err != nil {
+			fmt.Print("Could not read Vault token from /home/vault/.vault-token")
+			return "", errors.New("No Vault token present")
+		}
+
+		t = string(tBytes)
+	}
+
+	return t, nil
+}
 
 func (p plugin) Get(root string, args []string) (map[string]string, error) {
+	var vaultAddr = os.Getenv("VAULT_ADDR")
+
+	var token, err = getToken()
+	if err != nil {
+		panic(err)
+	}
+
 	config := &api.Config{
 		Address: vaultAddr,
 	}
