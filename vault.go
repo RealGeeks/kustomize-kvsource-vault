@@ -17,7 +17,7 @@ var KVSource plugin
 func getToken() (string, error) {
 	var t, exists = os.LookupEnv("VAULT_TOKEN")
 	if !exists {
-		fmt.Print("VAULT_TOKEN not set, trying filesystem...")
+		fmt.Println("VAULT_TOKEN not set, trying filesystem...")
 
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
@@ -25,13 +25,13 @@ func getToken() (string, error) {
 			return "", errors.New("No home directory")
 		}
 
-		tBytes, err := ioutil.ReadFile(fmt.Sprint("%s/.vault-token", homeDir))
+		tBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/.vault-token", homeDir))
 		if err != nil {
-			fmt.Print("Could not read Vault token from $HOME/.vault-token")
+			fmt.Println("Could not read Vault token from $HOME/.vault-token")
 			return "", errors.New("No Vault token present")
 		}
 
-		t = string(tBytes)
+		t = strings.TrimSpace(string(tBytes))
 	}
 
 	return t, nil
