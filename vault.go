@@ -19,9 +19,15 @@ func getToken() (string, error) {
 	if !exists {
 		fmt.Print("VAULT_TOKEN not set, trying filesystem...")
 
-		tBytes, err := ioutil.ReadFile("/home/vault/.vault-token")
+		homeDir, err := os.UserHomeDir()
 		if err != nil {
-			fmt.Print("Could not read Vault token from /home/vault/.vault-token")
+			panic(err)
+			return "", errors.New("No home directory")
+		}
+
+		tBytes, err := ioutil.ReadFile(fmt.Sprint("%s/.vault-token", homeDir))
+		if err != nil {
+			fmt.Print("Could not read Vault token from $HOME/.vault-token")
 			return "", errors.New("No Vault token present")
 		}
 
