@@ -37,6 +37,7 @@ func (p plugin) Get(root string, args []string) (map[string]string, error) {
 		var splitPath = strings.Split(path, "/")
 		var secretPrefix = splitPath[len(splitPath)-1]
 		var key = t[1]
+		var splitKey = strings.Split(key, "@")
 
 		secret, err := client.Logical().Read(path)
 		if err != nil {
@@ -54,9 +55,13 @@ func (p plugin) Get(root string, args []string) (map[string]string, error) {
 
 		secretKey := fmt.Sprintf("%s_%s", secretPrefix, key)
 
-		mapOfSecrets[secretKey], ok = vaultSecretData[key].(string)
+		if len(splitKey) == 2 {
+			secretKey = splitKey[1]
+		}
+
+		mapOfSecrets[secretKey], ok = vaultSecretData[splitKey[0]].(string)
 		if !ok {
-			return nil, fmt.Errorf("%q was not found at %q", key, path)
+			return nil, fmt.Errorf("%q was not found at %q", splitKey[0], path)
 		}
 	}
 
