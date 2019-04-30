@@ -28,7 +28,7 @@ func getToken() (string, error) {
 		tBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/.vault-token", homeDir))
 		if err != nil {
 			fmt.Println("Could not read Vault token from $HOME/.vault-token")
-			return "", errors.New("No Vault token present")
+			return "", err
 		}
 
 		t = strings.TrimSpace(string(tBytes))
