@@ -17,8 +17,6 @@ var KVSource plugin
 func getToken() (string, error) {
 	var t, exists = os.LookupEnv("VAULT_TOKEN")
 	if !exists {
-		fmt.Println("VAULT_TOKEN not set, trying filesystem...")
-
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			panic(err)
