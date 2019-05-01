@@ -1,15 +1,10 @@
 FROM golang:1.12-stretch
 
-ENV KUBECTL_VER 1.13.3
-
 RUN apt-get update && apt-get install -y \
   curl \
   gettext \
   g++ \
   git 
-
-RUN curl -L https://storage.googleapis.com/kubernetes-release/release/v${KUBECTL_VER}/bin/linux/amd64/kubectl -o /usr/bin/kubectl \
-  && chmod +x /usr/bin/kubectl
 
 RUN go get github.com/hashicorp/vault/api
 RUN go get sigs.k8s.io/kustomize
@@ -26,7 +21,6 @@ RUN apt-get update && apt-get install -y \
 
 COPY --from=0 /opt/kustomize/plugin/kvSources/vault.so /opt/kustomize/plugin/kvSources/vault.so
 COPY --from=0 /go/bin/kustomize /usr/bin/kustomize
-COPY --from=0 /usr/bin/kubectl /usr/bin/kubectl
 
 WORKDIR /working 
 
