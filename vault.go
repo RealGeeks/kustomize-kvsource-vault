@@ -15,21 +15,24 @@ type plugin struct{}
 var KVSource plugin
 
 func getToken() (string, error) {
-	var t, exists = os.LookupEnv("VAULT_TOKEN")
+	t, exists := os.LookupEnv("VAULT_TOKEN")
 	if !exists {
-		homeDir, err := os.UserHomeDir()
-		if err != nil {
-			panic(err)
-			return "", errors.New("No home directory")
+		tokenPath, exists := os.LookupEnv("VAULT_TOKEN_PATH")
+		if exists == false {
+			return "", errors.New("No vault token and vault token path")
 		}
 
-		tBytes, err := ioutil.ReadFile(fmt.Sprintf("%s/.vault-token", homeDir))
+		tBytes, err := ioutil.ReadFile(tokenPath)
 		if err != nil {
-			fmt.Println("Could not read Vault token from $HOME/.vault-token")
+			fmt.Println("Could not read Vault token from $VAULT_TOKEN_PATH")
 			return "", err
 		}
 
 		t = strings.TrimSpace(string(tBytes))
+		if len(t) == 0 {
+			fmt.Println("Vault token file is empty")
+			return "", err
+		}
 	}
 
 	return t, nil
