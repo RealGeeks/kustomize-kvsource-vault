@@ -25,8 +25,6 @@ type plugin struct {
 	ldr              ifc.Loader
 	types.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	Secrets          []VaultSecret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
-	VaultToken       string
-	VaultAddr        string
 	VaultClient      *api.Client
 }
 
@@ -62,8 +60,6 @@ func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
 
 	p.rf = rf
 	p.ldr = ldr
-	p.VaultToken = vaultToken
-	p.VaultAddr = vaultAddr
 	p.VaultClient = client
 
 	return yaml.Unmarshal(c, p)
