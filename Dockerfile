@@ -6,24 +6,27 @@ RUN apt-get update && apt-get install -y \
   g++ \
   git 
 
-RUN go get github.com/hashicorp/vault/api
-RUN go get sigs.k8s.io/kustomize
-RUN go install sigs.k8s.io/kustomize
+WORKDIR /code
 
-COPY ./vault.go /go/src/kustomize-kvsource-vault/
+RUN GO111MODULE=on go get sigs.k8s.io/kustomize/kustomize/v3@v3.2.1
 
-RUN go build -buildmode plugin -o /opt/kustomize/plugin/kvSources/vault.so /go/src/kustomize-kvsource-vault/vault.go 
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY ./vault.go ./
+
+RUN go build -buildmode plugin -o /opt/kustomize/plugin/kvSources/vault.so ./vault.go 
 
 FROM debian:stretch-slim
 
 RUN apt-get update && apt-get install -y \
   git
 
-COPY --from=0 /opt/kustomize/plugin/kvSources/vault.so /opt/kustomize/plugin/kvSources/vault.so
+COPY --from=0 /opt/kustomize/plugin/kvSources/vault.so /opt/kustomize/plugin/kustomize.realgeeks.com/v1beta1/secretsfromvault/SecretsFromVault.so
 COPY --from=0 /go/bin/kustomize /usr/bin/kustomize
 
 WORKDIR /working 
 
 ENV XDG_CONFIG_HOME=/opt
 
-ENTRYPOINT ["/usr/bin/kustomize", "--enable_alpha_goplugins_accept_panic_risk"]
+ENTRYPOINT ["/usr/bin/kustomize"]

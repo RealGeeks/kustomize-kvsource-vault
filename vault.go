@@ -8,18 +8,98 @@ import (
 	"strings"
 
 	"github.com/hashicorp/vault/api"
+	"sigs.k8s.io/kustomize/v3/pkg/ifc"
+	"sigs.k8s.io/kustomize/v3/pkg/resmap"
+	"sigs.k8s.io/kustomize/v3/pkg/types"
+	"sigs.k8s.io/yaml"
 )
 
-type plugin struct{}
+type VaultSecret struct {
+	Path    string
+	Key     string
+	Relabel string
+}
 
-var KVSource plugin
+type plugin struct {
+	rf               *resmap.Factory
+	ldr              ifc.Loader
+	types.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	Secrets          []VaultSecret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	VaultToken       string
+	VaultAddr        string
+	VaultClient      *api.Client
+}
+
+//nolint: golint
+//noinspection GoUnusedGlobalVariable
+var KustomizePlugin plugin
+
+var database = map[string]string{
+	"secret/data/prd/am1/kube0/newman-api": "SaturnV",
+}
+
+func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
+	vaultAddr, ok := os.LookupEnv("VAULT_ADDR")
+	if !ok {
+		return errors.New("Missing `VAULT_ADDR` env var: required")
+	}
+
+	vaultToken, err := getToken()
+	if err != nil {
+		return err
+	}
+
+	config := &api.Config{
+		Address: vaultAddr,
+	}
+
+	client, err := api.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	client.SetToken(vaultToken)
+
+	p.rf = rf
+	p.ldr = ldr
+	p.VaultToken = vaultToken
+	p.VaultAddr = vaultAddr
+	p.VaultClient = client
+
+	return yaml.Unmarshal(c, p)
+}
+
+func (p *plugin) Generate() (resmap.ResMap, error) {
+	args := types.SecretArgs{}
+	args.Name = p.Name
+	args.Namespace = p.Namespace
+
+	for _, secret := range p.Secrets {
+		value, err := p.getSecretFromVault(secret.Path, secret.Key)
+		if err != nil {
+			return nil, err
+		}
+
+		var key string
+		if secret.Relabel != "" {
+			key = secret.Relabel
+		} else {
+			key = secret.Key
+		}
+
+		entry := fmt.Sprintf("%s=%s", key, value)
+		args.LiteralSources = append(args.LiteralSources, entry)
+	}
+
+	return p.rf.FromSecretArgs(p.ldr, nil, args)
+}
 
 func getToken() (string, error) {
 	t, exists := os.LookupEnv("VAULT_TOKEN")
 	if !exists {
 		tokenPath, exists := os.LookupEnv("VAULT_TOKEN_PATH")
 		if exists == false {
-			return "", errors.New("No vault token and vault token path")
+			return "", errors.New("No vault token and no vault token path")
 		}
 
 		tBytes, err := ioutil.ReadFile(tokenPath)
@@ -38,62 +118,22 @@ func getToken() (string, error) {
 	return t, nil
 }
 
-func (p plugin) Get(root string, args []string) (map[string]string, error) {
-	var vaultAddr = os.Getenv("VAULT_ADDR")
-
-	var token, err = getToken()
+func (p *plugin) getSecretFromVault(path string, key string) (value string, err error) {
+	secret, err := p.VaultClient.Logical().Read(path)
 	if err != nil {
-		panic(err)
+		return "", err
+	}
+	if secret == nil {
+		return "", fmt.Errorf("the path %s was not found", path)
 	}
 
-	config := &api.Config{
-		Address: vaultAddr,
+	data, ok := secret.Data["data"].(map[string]interface{})
+	if !ok {
+		return "", fmt.Errorf("malformed secret data: %q", secret.Data["data"])
+	}
+	if v, ok := data[key].(string); ok {
+		return v, nil
 	}
 
-	client, err := api.NewClient(config)
-
-	if err != nil {
-		fmt.Println(err)
-		return nil, err
-	}
-
-	client.SetToken(token)
-
-	mapOfSecrets := make(map[string]string)
-
-	for _, k := range args {
-		var t = strings.Split(k, "//")
-		var path = t[0]
-		var splitPath = strings.Split(path, "/")
-		var secretPrefix = splitPath[len(splitPath)-1]
-		var key = t[1]
-		var splitKey = strings.Split(key, "@")
-
-		secret, err := client.Logical().Read(path)
-		if err != nil {
-			fmt.Println(err)
-			return nil, err
-		}
-		if secret == nil {
-			return nil, fmt.Errorf("the path %q was not found", path)
-		}
-
-		vaultSecretData, ok := secret.Data["data"].(map[string]interface{})
-		if !ok {
-			return nil, fmt.Errorf("malformed ecret data: %q", secret.Data["data"])
-		}
-
-		secretKey := fmt.Sprintf("%s_%s", secretPrefix, key)
-
-		if len(splitKey) == 2 {
-			secretKey = splitKey[1]
-		}
-
-		mapOfSecrets[secretKey], ok = vaultSecretData[splitKey[0]].(string)
-		if !ok {
-			return nil, fmt.Errorf("%q was not found at %q", splitKey[0], path)
-		}
-	}
-
-	return mapOfSecrets, nil
+	return "", fmt.Errorf("Failed to get secret from Vault: %s:%s", path, key)
 }
