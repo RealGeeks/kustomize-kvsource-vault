@@ -14,17 +14,17 @@ import (
 	"sigs.k8s.io/yaml"
 )
 
-type VaultSecret struct {
-	Path    string
-	Key     string
-	Relabel string
+type vaultSecret struct {
+	Path      string
+	Key       string
+	SecretKey string
 }
 
 type plugin struct {
 	rf               *resmap.Factory
 	ldr              ifc.Loader
 	types.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	Secrets          []VaultSecret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	Secrets          []vaultSecret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 	VaultClient      *api.Client
 }
 
@@ -42,7 +42,7 @@ func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
 		return errors.New("Missing `VAULT_ADDR` env var: required")
 	}
 
-	vaultToken, err := getToken()
+	vaultToken, err := getVaultToken()
 	if err != nil {
 		return err
 	}
@@ -77,8 +77,8 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 		}
 
 		var key string
-		if secret.Relabel != "" {
-			key = secret.Relabel
+		if secret.SecretKey != "" {
+			key = secret.SecretKey
 		} else {
 			key = secret.Key
 		}
@@ -90,7 +90,7 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 	return p.rf.FromSecretArgs(p.ldr, nil, args)
 }
 
-func getToken() (string, error) {
+func getVaultToken() (string, error) {
 	t, exists := os.LookupEnv("VAULT_TOKEN")
 	if !exists {
 		tokenPath, exists := os.LookupEnv("VAULT_TOKEN_PATH")
