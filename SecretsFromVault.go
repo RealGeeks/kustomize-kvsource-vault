@@ -15,16 +15,21 @@ import (
 )
 
 type vaultSecret struct {
-	Path      string
-	Key       string
-	SecretKey string
+	Path      string `json:"path,omitempty" yaml:"path,omitempty"`
+	Key       string `json:"key,omitempty" yaml:"key,omitempty"`
+	SecretKey string `json:"secretKey,omitempty" yaml:"secretKey,omitempty"`
+}
+
+type secretSpec struct {
+	Secrets []vaultSecret           `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	Options *types.GeneratorOptions `json:"options,omitempty" yaml:"options,omitempty"`
 }
 
 type plugin struct {
 	rf               *resmap.Factory
 	ldr              ifc.Loader
+	Spec             secretSpec `json:"spec,omitempty" yaml:"spec,omitempty"`
 	types.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
-	Secrets          []vaultSecret `json:"secrets,omitempty" yaml:"secrets,omitempty"`
 	VaultClient      *api.Client
 }
 
@@ -32,14 +37,10 @@ type plugin struct {
 //noinspection GoUnusedGlobalVariable
 var KustomizePlugin plugin
 
-var database = map[string]string{
-	"secret/data/prd/am1/kube0/newman-api": "SaturnV",
-}
-
 func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
 	vaultAddr, ok := os.LookupEnv("VAULT_ADDR")
 	if !ok {
-		return errors.New("Missing `VAULT_ADDR` env var: required")
+		return errors.New("missing `VAULT_ADDR` env var: required")
 	}
 
 	vaultToken, err := getVaultToken()
@@ -70,7 +71,7 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 	args.Name = p.Name
 	args.Namespace = p.Namespace
 
-	for _, secret := range p.Secrets {
+	for _, secret := range p.Spec.Secrets {
 		value, err := p.getSecretFromVault(secret.Path, secret.Key)
 		if err != nil {
 			return nil, err
@@ -87,7 +88,7 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 		args.LiteralSources = append(args.LiteralSources, entry)
 	}
 
-	return p.rf.FromSecretArgs(p.ldr, nil, args)
+	return p.rf.FromSecretArgs(p.ldr, p.Spec.Options, args)
 }
 
 func getVaultToken() (string, error) {
