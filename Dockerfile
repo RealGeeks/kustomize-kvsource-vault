@@ -1,4 +1,4 @@
-FROM golang:1.12-stretch
+FROM golang:1.13-stretch
 
 RUN apt-get update && apt-get install -y \
   curl \
@@ -8,7 +8,7 @@ RUN apt-get update && apt-get install -y \
 
 WORKDIR /code
 
-RUN GO111MODULE=on go get sigs.k8s.io/kustomize/kustomize/v3@v3.2.1
+RUN GO111MODULE=on go get sigs.k8s.io/kustomize/kustomize/v3@v3.5.4
 
 COPY go.mod go.sum ./
 RUN go mod download
