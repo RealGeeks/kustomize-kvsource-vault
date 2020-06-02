@@ -33,6 +33,8 @@ type plugin struct {
 	VaultClient      *api.Client
 }
 
+const saPath = "/run/secrets/kubernetes.io/serviceaccount/token"
+
 //nolint: golint
 //noinspection GoUnusedGlobalVariable
 var KustomizePlugin plugin
@@ -43,16 +45,16 @@ func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
 		return errors.New("missing `VAULT_ADDR` env var: required")
 	}
 
-	vaultToken, err := getVaultToken()
-	if err != nil {
-		return err
-	}
-
 	config := &api.Config{
 		Address: vaultAddr,
 	}
 
 	client, err := api.NewClient(config)
+	if err != nil {
+		return err
+	}
+
+	vaultToken, err := getVaultToken(client)
 	if err != nil {
 		return err
 	}
@@ -91,9 +93,31 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 	return p.rf.FromSecretArgs(p.ldr, p.Spec.Options, args)
 }
 
-func getVaultToken() (string, error) {
+func getVaultToken(client *api.Client) (string, error) {
 	t, exists := os.LookupEnv("VAULT_TOKEN")
 	if !exists {
+		backend, exists := os.LookupEnv("VAULT_BACKEND")
+		if exists {
+			role, exists := os.LookupEnv("VAULT_ROLE")
+			if exists == false {
+				return "", errors.New("No vault role is set for backend")
+			}
+
+			jwtByte, err := ioutil.ReadFile(saPath)
+			jwt := strings.TrimSpace(string(jwtByte))
+			options := map[string]interface{}{
+				"jwt": jwt,
+				"role": role,
+			}
+			path := fmt.Sprintf("auth/%s/login", backend)
+			secret, err := client.Logical().Write(path, options)
+			if err != nil {
+				return "", err
+			}
+
+			token := secret.Auth.ClientToken
+			return token, nil
+		}
 		tokenPath, exists := os.LookupEnv("VAULT_TOKEN_PATH")
 		if exists == false {
 			return "", errors.New("No vault token and no vault token path")
