@@ -8,9 +8,9 @@ import (
 	"strings"
 
 	"github.com/hashicorp/vault/api"
-	"sigs.k8s.io/kustomize/v3/pkg/ifc"
-	"sigs.k8s.io/kustomize/v3/pkg/resmap"
-	"sigs.k8s.io/kustomize/v3/pkg/types"
+	"sigs.k8s.io/kustomize/api/kv"
+	"sigs.k8s.io/kustomize/api/resmap"
+	"sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/yaml"
 )
 
@@ -21,15 +21,15 @@ type vaultSecret struct {
 }
 
 type secretSpec struct {
-	Secrets []vaultSecret           `json:"secrets,omitempty" yaml:"secrets,omitempty"`
-	Options *types.GeneratorOptions `json:"options,omitempty" yaml:"options,omitempty"`
+	Secrets  []vaultSecret           `json:"secrets,omitempty" yaml:"secrets,omitempty"`
+	Options  *types.GeneratorOptions `json:"options,omitempty" yaml:"options,omitempty"`
+	Behavior string                  `json:"behavior,omitempty" yaml:"behavior,omitempty"`
 }
 
 type plugin struct {
-	rf               *resmap.Factory
-	ldr              ifc.Loader
-	Spec             secretSpec `json:"spec,omitempty" yaml:"spec,omitempty"`
+	h                *resmap.PluginHelpers
 	types.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
+	Spec             secretSpec `json:"spec,omitempty" yaml:"spec,omitempty"`
 	VaultClient      *api.Client
 }
 
@@ -37,7 +37,7 @@ type plugin struct {
 //noinspection GoUnusedGlobalVariable
 var KustomizePlugin plugin
 
-func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
+func (p *plugin) Config(h *resmap.PluginHelpers, c []byte) error {
 	vaultAddr, ok := os.LookupEnv("VAULT_ADDR")
 	if !ok {
 		return errors.New("missing `VAULT_ADDR` env var: required")
@@ -59,9 +59,8 @@ func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
 
 	client.SetToken(vaultToken)
 
-	p.rf = rf
-	p.ldr = ldr
 	p.VaultClient = client
+	p.h = h
 
 	return yaml.Unmarshal(c, p)
 }
@@ -70,6 +69,8 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 	args := types.SecretArgs{}
 	args.Name = p.Name
 	args.Namespace = p.Namespace
+	args.Behavior = p.Spec.Behavior
+	args.Options = p.Spec.Options
 
 	for _, secret := range p.Spec.Secrets {
 		value, err := p.getSecretFromVault(secret.Path, secret.Key)
@@ -88,7 +89,9 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 		args.LiteralSources = append(args.LiteralSources, entry)
 	}
 
-	return p.rf.FromSecretArgs(p.ldr, p.Spec.Options, args)
+	rf := p.h.ResmapFactory()
+
+	return rf.FromSecretArgs(kv.NewLoader(p.h.Loader(), p.h.Validator()), args)
 }
 
 func getVaultToken() (string, error) {
