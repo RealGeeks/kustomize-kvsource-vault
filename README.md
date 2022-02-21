@@ -6,7 +6,7 @@ a Dockerfile that exposes a version of kustomize that includes the plugin.
 ## Kustomize Secret Generator Go plugin
 
 This Go plugin allows [Kustomize](https://kustomize.io) to generate Kubernetes
-Secret manifests that contain secrets from [Hashiciorp
+Secret manifests that contain secrets from [HashiCorp
 Vault](https://vaultproject.io). See the Kustomize [Generating Secrets
 docs](https://github.com/kubernetes-sigs/kustomize/blob/7971ac1/examples/kvSourceGoPlugin.md)
 for more information about the mechanics.
