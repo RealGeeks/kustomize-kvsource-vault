@@ -8,9 +8,10 @@ import (
 	"strings"
 
 	"github.com/hashicorp/vault/api"
-	"sigs.k8s.io/kustomize/v3/pkg/ifc"
-	"sigs.k8s.io/kustomize/v3/pkg/resmap"
-	"sigs.k8s.io/kustomize/v3/pkg/types"
+	"sigs.k8s.io/kustomize/api/ifc"
+	"sigs.k8s.io/kustomize/api/kv"
+	"sigs.k8s.io/kustomize/api/resmap"
+	"sigs.k8s.io/kustomize/api/types"
 	"sigs.k8s.io/yaml"
 )
 
@@ -27,17 +28,16 @@ type secretSpec struct {
 
 type plugin struct {
 	rf               *resmap.Factory
-	ldr              ifc.Loader
+	ldr              ifc.KvLoader
 	Spec             secretSpec `json:"spec,omitempty" yaml:"spec,omitempty"`
 	types.ObjectMeta `json:"metadata,omitempty" yaml:"metadata,omitempty" protobuf:"bytes,1,opt,name=metadata"`
 	VaultClient      *api.Client
 }
 
 //nolint: golint
-//noinspection GoUnusedGlobalVariable
 var KustomizePlugin plugin
 
-func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
+func (p *plugin) Config(h *resmap.PluginHelpers, c []byte) error {
 	vaultAddr, ok := os.LookupEnv("VAULT_ADDR")
 	if !ok {
 		return errors.New("missing `VAULT_ADDR` env var: required")
@@ -59,8 +59,8 @@ func (p *plugin) Config(ldr ifc.Loader, rf *resmap.Factory, c []byte) error {
 
 	client.SetToken(vaultToken)
 
-	p.rf = rf
-	p.ldr = ldr
+	p.rf = h.ResmapFactory()
+	p.ldr = kv.NewLoader(h.Loader(), h.Validator())
 	p.VaultClient = client
 
 	return yaml.Unmarshal(c, p)
@@ -88,7 +88,7 @@ func (p *plugin) Generate() (resmap.ResMap, error) {
 		args.LiteralSources = append(args.LiteralSources, entry)
 	}
 
-	return p.rf.FromSecretArgs(p.ldr, p.Spec.Options, args)
+	return p.rf.FromSecretArgs(p.ldr, args)
 }
 
 func getVaultToken() (string, error) {
@@ -120,15 +120,12 @@ func (p *plugin) getSecretFromVault(path string, key string) (value string, err 
 	if err != nil {
 		return "", err
 	}
-	if secret == nil {
-		return "", fmt.Errorf("the path %s was not found", path)
+
+	if secret == nil || secret.Data == nil {
+		return "", fmt.Errorf("path %s not found: %s", path, strings.Join(secret.Warnings, ","))
 	}
 
-	data, ok := secret.Data["data"].(map[string]interface{})
-	if !ok {
-		return "", fmt.Errorf("malformed secret data: %q", secret.Data["data"])
-	}
-	if v, ok := data[key].(string); ok {
+	if v, ok := secret.Data[key].(string); ok {
 		return v, nil
 	}
 
